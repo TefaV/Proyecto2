@@ -2,31 +2,35 @@
 FROM php:8.2-apache
 
 # Instalar extensiones necesarias
-RUN apt-get update && apt-get install -y libpng-dev zip unzip \
-    && docker-php-ext-install pdo pdo_mysql gd
+RUN apt-get update && apt-get install -y \
+    libpng-dev zip unzip git curl libonig-dev libxml2-dev sqlite3 libsqlite3-dev \
+    && docker-php-ext-install pdo pdo_sqlite mbstring gd
 
 # Instalar Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Configurar directorio de trabajo
+# Establece el directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar todo el proyecto Laravel
-COPY . /var/www/html/
+# Copia todos los archivos del proyecto
+COPY . .
 
-# Copiar .env.example como .env si no se ha hecho
-RUN cp .env.example .env
+# Copiar archivo .env si no existe
+RUN if [ ! -f .env ]; then cp .env.example .env; fi
 
-# Instalar dependencias de Laravel
+# Instalar dependencias
 RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --optimize-autoloader
 
-# Ajustar permisos necesarios para Laravel
-RUN mkdir -p storage/logs database \
-    && touch storage/logs/laravel.log database/database.sqlite \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database \
-    && chmod -R ug+rwx /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database
+# Generar clave de aplicación
+RUN php artisan key:generate
 
-# Configurar Apache
+# Crear base de datos SQLite y dar permisos
+RUN mkdir -p storage/logs database \
+    && touch database/database.sqlite \
+    && chown -R www-data:www-data storage bootstrap/cache database \
+    && chmod -R ug+rwx storage bootstrap/cache database
+
+# Configurar Apache para servir desde /public
 RUN echo '<VirtualHost *:80>' > /etc/apache2/sites-available/000-default.conf \
     && echo '    DocumentRoot /var/www/html/public' >> /etc/apache2/sites-available/000-default.conf \
     && echo '    <Directory /var/www/html/public>' >> /etc/apache2/sites-available/000-default.conf \
@@ -35,11 +39,11 @@ RUN echo '<VirtualHost *:80>' > /etc/apache2/sites-available/000-default.conf \
     && echo '    </Directory>' >> /etc/apache2/sites-available/000-default.conf \
     && echo '</VirtualHost>' >> /etc/apache2/sites-available/000-default.conf
 
-# Habilitar mod_rewrite y headers
+# Habilitar módulos de Apache
 RUN a2enmod rewrite headers
 
 # Exponer el puerto 80
 EXPOSE 80
 
-# Comando de inicio
-CMD php artisan key:generate --force && php artisan optimize && php artisan migrate --force --seed && apache2-foreground
+# Comando de arranque
+CMD php artisan migrate --force && php artisan db:seed --force && apache2-foreground
