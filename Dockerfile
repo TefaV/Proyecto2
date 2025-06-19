@@ -11,17 +11,14 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 # Configurar directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar primero composer.json y composer.lock
-COPY composer.json composer.lock /var/www/html/
+# Copiar todo el proyecto Laravel
+COPY . /var/www/html/
 
-# Copiar .env.example como .env
-COPY .env.example /var/www/html/.env
+# Copiar .env.example como .env si no se ha hecho
+RUN cp .env.example .env
 
 # Instalar dependencias de Laravel
 RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --optimize-autoloader
-
-# Copiar todo el proyecto
-COPY . /var/www/html/
 
 # Ajustar permisos necesarios para Laravel
 RUN mkdir -p storage/logs database \
